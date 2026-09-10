@@ -47,6 +47,9 @@ spec:
             - name: INTERNAL_API_KEY
               value: "demo_internal_api_key_123456789"
 
+            - name: S3_BUCKET
+              value: "__S3_BUCKET__"
+
           readinessProbe:
             httpGet:
               path: /health

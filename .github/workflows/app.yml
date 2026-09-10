@@ -1,14 +1,6 @@
 name: Application Build and Deploy
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "app/**"
-      - "kubernetes/**"
-      - ".github/workflows/app.yml"
-
   workflow_dispatch:
 
 permissions:
@@ -17,11 +9,8 @@ permissions:
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'sa-east-1' }}
-
-  EKS_CLUSTER: cortex-security-lab
   K8S_NAMESPACE: cortex-security-lab
   APP_NAME: cortex-security-lab-app
-  ECR_REPOSITORY: cortex-eks-security-lab-app
 
   CORTEX_API_KEY: ${{ secrets.CORTEX_API_KEY }}
   CORTEX_API_KEY_ID: ${{ secrets.CORTEX_API_KEY_ID }}
@@ -35,20 +24,58 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials for Terraform outputs
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubTerraformOutputs
+
+      - name: Verify Terraform AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=cortex-eks-security-lab/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+
+      - name: Resolve infrastructure outputs
+        working-directory: terraform
+        run: |
+          EKS_CLUSTER=$(terraform output -raw eks_cluster_name)
+          ECR_REPOSITORY_URL=$(terraform output -raw ecr_repository_url)
+          S3_BUCKET=$(terraform output -raw sensitive_s3_bucket_name)
+
+          ECR_REGISTRY="${ECR_REPOSITORY_URL%/*}"
+          ECR_REPOSITORY="${ECR_REPOSITORY_URL##*/}"
+
+          echo "EKS_CLUSTER=${EKS_CLUSTER}" >> "${GITHUB_ENV}"
+          echo "ECR_REPOSITORY_URL=${ECR_REPOSITORY_URL}" >> "${GITHUB_ENV}"
+          echo "ECR_REGISTRY=${ECR_REGISTRY}" >> "${GITHUB_ENV}"
+          echo "ECR_REPOSITORY=${ECR_REPOSITORY}" >> "${GITHUB_ENV}"
+          echo "S3_BUCKET=${S3_BUCKET}" >> "${GITHUB_ENV}"
+
+          echo "Cluster: ${EKS_CLUSTER}"
+          echo "ECR repository: ${ECR_REPOSITORY_URL}"
+          echo "Sensitive S3 bucket: ${S3_BUCKET}"
+
+      - name: Configure AWS credentials for application deployment
         uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubApplicationDeploy
 
-      - name: Verify AWS identity
+      - name: Verify deploy AWS identity
         run: aws sts get-caller-identity
-
-      - name: Resolve ECR registry
-        run: |
-          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          echo "ECR_REGISTRY=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com" >> "${GITHUB_ENV}"
 
       - name: Login to Amazon ECR
         run: |
@@ -93,7 +120,7 @@ jobs:
         continue-on-error: true
         run: |
           if [ ! -x "./cortexcli" ]; then
-            echo "Cortex CLI unavailable - skipping scan"
+            echo "Cortex CLI unavailable - skipping code scan"
             exit 1
           fi
 
@@ -126,22 +153,30 @@ jobs:
         run: |
           docker tag \
             "${ECR_REPOSITORY}:${GITHUB_SHA}" \
-            "${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}"
+            "${ECR_REPOSITORY_URL}:${GITHUB_SHA}"
 
           docker tag \
             "${ECR_REPOSITORY}:latest" \
-            "${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
+            "${ECR_REPOSITORY_URL}:latest"
 
       - name: Push image to ECR
         run: |
-          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}"
-          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
+          docker push "${ECR_REPOSITORY_URL}:${GITHUB_SHA}"
+          docker push "${ECR_REPOSITORY_URL}:latest"
 
       - name: Configure kubeconfig
         run: |
           aws eks update-kubeconfig \
             --region "${AWS_REGION}" \
             --name "${EKS_CLUSTER}"
+
+      - name: Render Kubernetes manifest
+        run: |
+          test -n "${S3_BUCKET}"
+          sed -i "s|__S3_BUCKET__|${S3_BUCKET}|g" kubernetes/app.yaml
+
+          echo "Rendered S3 bucket:"
+          grep -n -A1 "name: S3_BUCKET" kubernetes/app.yaml
 
       - name: Deploy application
         run: |
@@ -152,7 +187,7 @@ jobs:
 
           kubectl set image \
             deployment/${APP_NAME} \
-            ${APP_NAME}="${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}" \
+            ${APP_NAME}="${ECR_REPOSITORY_URL}:${GITHUB_SHA}" \
             -n "${K8S_NAMESPACE}"
 
       - name: Wait for application rollout

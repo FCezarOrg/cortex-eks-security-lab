@@ -44,7 +44,7 @@ resource "aws_iam_role" "github_actions" {
   })
 
   tags = {
-    Name      = "GitHubEKSDeployRole"
+    Name      = "${var.project_name}-deploy-role"
     ManagedBy = "Terraform"
     Purpose   = "GitHubActionsEKSDeploy"
     yor_trace = "747077c8-3e08-4acb-87e2-91a9a09ffb36"

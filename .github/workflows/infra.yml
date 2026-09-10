@@ -1,14 +1,16 @@
 name: Terraform Infrastructure
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "terraform/**"
-      - ".github/workflows/infra.yml"
-
   workflow_dispatch:
+    inputs:
+      action:
+        description: "Terraform action"
+        required: true
+        default: "plan"
+        type: choice
+        options:
+          - plan
+          - apply
 
 permissions:
   id-token: write
@@ -119,5 +121,5 @@ jobs:
             -out=tfplan
 
       - name: Terraform Apply
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: ${{ inputs.action == 'apply' }}
         run: terraform apply -auto-approve tfplan

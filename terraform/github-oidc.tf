@@ -15,7 +15,7 @@ data "aws_iam_openid_connect_provider" "github_actions" {
 # ============================================================
 
 resource "aws_iam_role" "github_actions" {
-  name        = "GitHubEKSDeployRole"
+  name        = "${var.project_name}-deploy-role"
   description = "Role assumed by GitHub Actions through OIDC"
 
   assume_role_policy = jsonencode({

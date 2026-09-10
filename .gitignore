@@ -1,0 +1,73 @@
+# Terraform working directory
+**/.terraform/*
+
+# Terraform state
+*.tfstate
+*.tfstate.*
+
+# Terraform plans
+*.tfplan
+
+# Variable files - may contain secrets
+*.tfvars
+*.tfvars.json
+
+# Environment / credentials
+.env
+.env.*
+*.pem
+*.key
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Terraform local files
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+*.bak
+*.before-imdsv1
+terraform.tfvars
+.terraform.tfstate.lock.info
+crash.log
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+tfplan
+tfplan-*
+*.tfplan
+backend.hcl
+
+# Local review files
+cortex-security-lab-review.txt
+cortex-cleanup-check.txt
+
+# macOS
+.DS_Store
+
+# Terraform runtime/state
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+
+# Local review artifacts
+cortex-cleanup-check.txt
+cortex-final-check.txt
+cortex-security-lab-preflight.txt
+cortex-security-lab-review.txt
+
+# Local OS/editor files
+.DS_Store
+.vscode/
+.idea/

@@ -1,0 +1,27 @@
+aws_region   = "sa-east-1"
+project_name = "cortex-eks-security-lab"
+
+# GitHub repository that will be allowed to assume the AWS role.
+github_org  = "YOUR_GITHUB_ORG_OR_USERNAME"
+github_repo = "cortex-eks-security-lab"
+
+# Immutable GitHub IDs.
+#
+# Retrieve them with:
+#
+# gh api repos/YOUR_GITHUB_ORG_OR_USERNAME/cortex-eks-security-lab \
+#   --jq '{repo_id: .id, owner_id: .owner.id}'
+#
+github_org_id  = "YOUR_GITHUB_OWNER_ID"
+github_repo_id = "YOUR_GITHUB_REPOSITORY_ID"
+
+# OPTIONAL
+#
+# If your AWS account already has the GitHub Actions OIDC provider,
+# specify its ARN here:
+#
+# arn:aws:iam::<ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com
+#
+# Leave empty to let this bootstrap create the OIDC provider.
+#
+github_oidc_provider_arn = ""

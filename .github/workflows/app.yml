@@ -1,0 +1,168 @@
+name: Application Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - "kubernetes/**"
+      - ".github/workflows/app.yml"
+
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'sa-east-1' }}
+
+  EKS_CLUSTER: cortex-security-lab
+  K8S_NAMESPACE: cortex-security-lab
+  APP_NAME: cortex-security-lab-app
+  ECR_REPOSITORY: cortex-eks-security-lab-app
+
+  CORTEX_API_KEY: ${{ secrets.CORTEX_API_KEY }}
+  CORTEX_API_KEY_ID: ${{ secrets.CORTEX_API_KEY_ID }}
+  CORTEX_API_URL: ${{ vars.CORTEX_API_URL }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubApplicationDeploy
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Resolve ECR registry
+        run: |
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "ECR_REGISTRY=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com" >> "${GITHUB_ENV}"
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password \
+            --region "${AWS_REGION}" \
+          | docker login \
+            --username AWS \
+            --password-stdin "${ECR_REGISTRY}"
+
+      - name: Build container image
+        run: |
+          docker build \
+            -t "${ECR_REPOSITORY}:${GITHUB_SHA}" \
+            -t "${ECR_REPOSITORY}:latest" \
+            ./app
+
+      - name: Download Cortex CLI
+        continue-on-error: true
+        run: |
+          if [ -z "${CORTEX_API_URL}" ] || \
+             [ -z "${CORTEX_API_KEY}" ] || \
+             [ -z "${CORTEX_API_KEY_ID}" ]; then
+            echo "Cortex credentials not configured - skipping download"
+            exit 1
+          fi
+
+          crtx_resp=$(curl -sS \
+            "${CORTEX_API_URL}/public_api/v1/unified-cli/releases/download-link?os=linux&architecture=amd64" \
+            -H "x-xdr-auth-id: ${CORTEX_API_KEY_ID}" \
+            -H "Authorization: ${CORTEX_API_KEY}")
+
+          crtx_url=$(echo "${crtx_resp}" | jq -r '.signed_url')
+
+          test -n "${crtx_url}"
+          test "${crtx_url}" != "null"
+
+          curl -sSLo cortexcli "${crtx_url}"
+          chmod +x cortexcli
+          ./cortexcli --version
+
+      - name: Cortex Code Scan
+        continue-on-error: true
+        run: |
+          if [ ! -x "./cortexcli" ]; then
+            echo "Cortex CLI unavailable - skipping scan"
+            exit 1
+          fi
+
+          ./cortexcli \
+            --api-base-url "${CORTEX_API_URL}" \
+            --api-key "${CORTEX_API_KEY}" \
+            --api-key-id "${CORTEX_API_KEY_ID}" \
+            code scan \
+            --directory "${{ github.workspace }}" \
+            --repo-id "${{ github.repository }}" \
+            --branch "${{ github.ref_name }}" \
+            --source "GITHUB_ACTIONS" \
+            --repo-url "${{ github.server_url }}/${{ github.repository }}"
+
+      - name: Cortex Image Scan
+        continue-on-error: true
+        run: |
+          if [ ! -x "./cortexcli" ]; then
+            echo "Cortex CLI unavailable - skipping image scan"
+            exit 1
+          fi
+
+          ./cortexcli \
+            --api-base-url "${CORTEX_API_URL}" \
+            --api-key "${CORTEX_API_KEY}" \
+            --api-key-id "${CORTEX_API_KEY_ID}" \
+            image scan "${ECR_REPOSITORY}:${GITHUB_SHA}"
+
+      - name: Tag image for ECR
+        run: |
+          docker tag \
+            "${ECR_REPOSITORY}:${GITHUB_SHA}" \
+            "${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}"
+
+          docker tag \
+            "${ECR_REPOSITORY}:latest" \
+            "${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
+
+      - name: Push image to ECR
+        run: |
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}"
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
+
+      - name: Configure kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region "${AWS_REGION}" \
+            --name "${EKS_CLUSTER}"
+
+      - name: Deploy application
+        run: |
+          kubectl apply -f kubernetes/serviceaccount.yaml
+          kubectl apply -f kubernetes/storageclass.yaml
+          kubectl apply -f kubernetes/mongodb.yaml
+          kubectl apply -f kubernetes/app.yaml
+
+          kubectl set image \
+            deployment/${APP_NAME} \
+            ${APP_NAME}="${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}" \
+            -n "${K8S_NAMESPACE}"
+
+      - name: Wait for application rollout
+        run: |
+          kubectl rollout status \
+            deployment/${APP_NAME} \
+            -n "${K8S_NAMESPACE}" \
+            --timeout=5m
+
+      - name: Show deployed resources
+        run: |
+          kubectl get pods -n "${K8S_NAMESPACE}" -o wide
+          kubectl get svc -n "${K8S_NAMESPACE}"

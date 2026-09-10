@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cortex-security-lab-app
+  namespace: cortex-security-lab
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: cortex-security-lab-app
+
+  template:
+    metadata:
+      labels:
+        app: cortex-security-lab-app
+
+    spec:
+      serviceAccountName: cortex-security-lab-app
+
+      containers:
+        - name: cortex-security-lab-app
+          image: cortex-security-lab-app:placeholder
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 8080
+
+          env:
+            - name: ENVIRONMENT
+              value: "security-lab"
+
+            - name: MONGO_HOST
+              value: "mongodb.cortex-security-lab.svc.cluster.local"
+
+            - name: MONGO_PORT
+              value: "27017"
+
+            # SECURITY LAB ONLY
+            # Synthetic credentials deliberately exposed.
+            - name: MONGO_USERNAME
+              value: "demo_admin"
+
+            - name: MONGO_PASSWORD
+              value: "DemoMongoPassword123!"
+
+            - name: INTERNAL_API_KEY
+              value: "demo_internal_api_key_123456789"
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cortex-security-lab-app
+  namespace: cortex-security-lab
+spec:
+  # SECURITY LAB ONLY:
+  # Deliberately exposes the application to the Internet.
+  type: LoadBalancer
+
+  selector:
+    app: cortex-security-lab-app
+
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

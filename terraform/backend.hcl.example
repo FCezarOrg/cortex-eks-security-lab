@@ -1,0 +1,5 @@
+bucket       = "cortex-eks-security-lab-tfstate-YOUR_AWS_ACCOUNT_ID"
+key          = "cortex-eks-security-lab/terraform.tfstate"
+region       = "sa-east-1"
+encrypt      = true
+use_lockfile = true

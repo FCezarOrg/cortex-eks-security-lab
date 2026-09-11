@@ -52,6 +52,14 @@ module "vpc" {
     "kubernetes.io/role/internal-elb" = 1
   }
   tags = {
+    git_commit           = "286a11d4c4f88fa2f82712bea09f85ee29ce7c13"
+    git_file             = "terraform/main.tf"
+    git_last_modified_at = "2026-09-10 16:57:43"
+    git_modifiers        = "fa_cezar"
+    git_org              = "FCezarOrg"
+    git_repo             = "cortex-eks-security-lab"
+    yor_name             = "vpc"
+    yor_trace            = "95324624-44ad-4e10-8ca8-78f64bfcbded"
   }
 }
 
@@ -149,5 +157,13 @@ module "eks" {
     }
   }
   tags = {
+    git_commit           = "5bacc0bdf2acb2cf157749ee4f396452680e1a7e"
+    git_file             = "terraform/main.tf"
+    git_last_modified_at = "2026-09-11 04:42:36"
+    git_modifiers        = "fa_cezar"
+    git_org              = "FCezarOrg"
+    git_repo             = "cortex-eks-security-lab"
+    yor_name             = "eks"
+    yor_trace            = "73a80dc5-7206-480e-960a-18c04656001f"
   }
 }

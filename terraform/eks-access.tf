@@ -8,9 +8,17 @@ resource "aws_eks_access_entry" "github" {
   type          = "STANDARD"
 
   tags = {
-    Project     = var.project_name
-    Environment = "security-lab"
-    ManagedBy   = "Terraform"
+    Project              = var.project_name
+    Environment          = "security-lab"
+    ManagedBy            = "Terraform"
+    git_commit           = "286a11d4c4f88fa2f82712bea09f85ee29ce7c13"
+    git_file             = "terraform/eks-access.tf"
+    git_last_modified_at = "2026-09-10 16:57:43"
+    git_modifiers        = "fa_cezar"
+    git_org              = "FCezarOrg"
+    git_repo             = "cortex-eks-security-lab"
+    yor_name             = "github"
+    yor_trace            = "13e69487-c63b-4186-97d4-9148bf20c5f1"
   }
 }
 

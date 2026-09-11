@@ -19,8 +19,16 @@ module "aws_lb_controller_pod_identity" {
   }
 
   tags = {
-    Name      = "${var.project_name}-aws-lbc"
-    ManagedBy = "Terraform"
-    Purpose   = "AWSLoadBalancerController"
+    Name                 = "${var.project_name}-aws-lbc"
+    ManagedBy            = "Terraform"
+    Purpose              = "AWSLoadBalancerController"
+    git_commit           = "5bacc0bdf2acb2cf157749ee4f396452680e1a7e"
+    git_file             = "terraform/alb-controller.tf"
+    git_last_modified_at = "2026-09-11 04:42:36"
+    git_modifiers        = "fa_cezar"
+    git_org              = "FCezarOrg"
+    git_repo             = "cortex-eks-security-lab"
+    yor_name             = "aws_lb_controller_pod_identity"
+    yor_trace            = "a8846ca1-93b7-4964-8f23-a2df54745569"
   }
 }

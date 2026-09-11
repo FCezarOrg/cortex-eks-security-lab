@@ -9,11 +9,19 @@ resource "aws_s3_bucket" "demo_sensitive_data" {
   bucket = "${var.project_name}-sensitive-data-${data.aws_caller_identity.current.account_id}"
 
   tags = {
-    Name           = "${var.project_name}-sensitive-data"
-    Project        = var.project_name
-    Environment    = "security-lab"
-    Classification = "CONFIDENTIAL-DEMO"
-    ManagedBy      = "Terraform"
+    Name                 = "${var.project_name}-sensitive-data"
+    Project              = var.project_name
+    Environment          = "security-lab"
+    Classification       = "CONFIDENTIAL-DEMO"
+    ManagedBy            = "Terraform"
+    git_commit           = "286a11d4c4f88fa2f82712bea09f85ee29ce7c13"
+    git_file             = "terraform/s3-demo.tf"
+    git_last_modified_at = "2026-09-10 16:57:43"
+    git_modifiers        = "fa_cezar"
+    git_org              = "FCezarOrg"
+    git_repo             = "cortex-eks-security-lab"
+    yor_name             = "demo_sensitive_data"
+    yor_trace            = "aea3c78f-7ba2-41c2-b920-d04481c89be3"
   }
 }
 

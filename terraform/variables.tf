@@ -49,8 +49,9 @@ variable "github_repo_id" {
 }
 
 variable "eks_admin_principal_arn" {
-  description = "IAM principal that receives EKS cluster administrator access"
+  description = "Optional IAM principal that receives EKS cluster administrator access"
   type        = string
+  default     = ""
 }
 
 variable "terraform_role_arn" {

@@ -53,6 +53,7 @@ jobs:
           EKS_CLUSTER=$(terraform output -raw eks_cluster_name)
           ECR_REPOSITORY_URL=$(terraform output -raw ecr_repository_url)
           S3_BUCKET=$(terraform output -raw sensitive_s3_bucket_name)
+          DEPLOY_ROLE_ARN="$(terraform output -raw github_deploy_role_arn)"
 
           ECR_REGISTRY="${ECR_REPOSITORY_URL%/*}"
           ECR_REPOSITORY="${ECR_REPOSITORY_URL##*/}"
@@ -62,6 +63,7 @@ jobs:
           echo "ECR_REGISTRY=${ECR_REGISTRY}" >> "${GITHUB_ENV}"
           echo "ECR_REPOSITORY=${ECR_REPOSITORY}" >> "${GITHUB_ENV}"
           echo "S3_BUCKET=${S3_BUCKET}" >> "${GITHUB_ENV}"
+          echo "DEPLOY_ROLE_ARN=${DEPLOY_ROLE_ARN}" >> "$GITHUB_ENV"
 
           echo "Cluster: ${EKS_CLUSTER}"
           echo "ECR repository: ${ECR_REPOSITORY_URL}"
@@ -70,7 +72,7 @@ jobs:
       - name: Configure AWS credentials for application deployment
         uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubApplicationDeploy
 

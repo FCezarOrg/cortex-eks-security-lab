@@ -50,10 +50,16 @@ The primary attack path demonstrated by the lab is:
     Internet
        |
        v
-    Public Load Balancer
+    Internet-Facing AWS ALB
        |
        v
-    Vulnerable Container
+    Kubernetes Ingress
+       |
+       v
+    ClusterIP Service
+       |
+       v
+    Vulnerable Application Pod
        |
        v
     Kubernetes ServiceAccount
@@ -68,6 +74,8 @@ The primary attack path demonstrated by the lab is:
     Synthetic Sensitive S3 Bucket
 
 This allows security findings to be correlated across external exposure, workload vulnerabilities, Kubernetes identity, AWS permissions, and sensitive data.
+
+The public application path is implemented using the AWS Load Balancer Controller. The controller is installed in the EKS cluster through Helm and uses EKS Pod Identity to obtain the AWS permissions required to provision and manage the internet-facing Application Load Balancer, target groups, listeners, and security groups.
 
 ---
 
@@ -95,7 +103,8 @@ Major components include:
 The Kubernetes layer deploys:
 
 - Vulnerable application container
-- Public LoadBalancer service
+- Internet-facing AWS ALB managed by the AWS Load Balancer Controller
+- Kubernetes Ingress and ClusterIP application service
 - Kubernetes ServiceAccount
 - MongoDB
 - Persistent storage
@@ -598,7 +607,7 @@ The workflow performs the following operations:
 11. Renders runtime Kubernetes configuration
 12. Deploys MongoDB
 13. Deploys the vulnerable application
-14. Exposes the application through a public LoadBalancer
+14. Exposes the application through an internet-facing AWS ALB, Kubernetes Ingress, and ClusterIP service
 
 No AWS account ID, EKS cluster name, ECR repository URL, or S3 bucket name needs to be hardcoded into the public repository.
 
@@ -663,7 +672,13 @@ One of the primary scenarios created by the lab is:
     Internet
        |
        v
-    Public Kubernetes LoadBalancer
+    Internet-Facing AWS ALB
+       |
+       v
+    Kubernetes Ingress
+       |
+       v
+    ClusterIP Service
        |
        v
     Vulnerable Application
@@ -699,7 +714,7 @@ Depending on the Cortex Cloud modules enabled in the tenant, the environment can
 | CWP | Container and workload vulnerabilities |
 | CIEM | IAM permissions and workload identities |
 | DSPM | Sensitive data discovery and exposure |
-| Attack Paths | Internet → workload → identity → data |
+| Attack Paths | Internet → ALB → Ingress → workload → identity → data |
 | Runtime | Workload activity and runtime telemetry |
 
 Actual findings depend on tenant configuration, enabled capabilities, licenses, scanning status, and deployed resources.

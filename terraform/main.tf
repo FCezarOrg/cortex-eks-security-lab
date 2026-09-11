@@ -96,9 +96,14 @@ module "eks" {
   addons = {
     coredns = {}
 
-    kube-proxy = {}
+    kube-proxy = {
+      addon_version = "v1.34.6-eksbuild.21"
+      most_recent   = false
+    }
 
     vpc-cni = {
+      addon_version  = "v1.23.0-eksbuild.1"
+      most_recent    = false
       before_compute = true
     }
 

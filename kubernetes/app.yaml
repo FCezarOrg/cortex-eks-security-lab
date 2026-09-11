@@ -71,9 +71,8 @@ metadata:
   name: cortex-security-lab-app
   namespace: cortex-security-lab
 spec:
-  # SECURITY LAB ONLY:
-  # Deliberately exposes the application to the Internet.
-  type: LoadBalancer
+  # Application is exposed externally through the ALB Ingress.
+  type: ClusterIP
 
   selector:
     app: cortex-security-lab-app

@@ -548,39 +548,48 @@ Alternatively, retrieve the deployment role ARN from the Terraform workflow outp
 
 ---
 
-## 14. AWS_DEPLOY_ROLE_ARN
+## 14. Application Deployment Role
 
-After the infrastructure has been successfully created, configure one additional GitHub Repository Variable:
+The application deployment role is created automatically by Terraform.
 
-    AWS_DEPLOY_ROLE_ARN
-
-Its value is the Terraform output:
+Its ARN is exposed through the Terraform output:
 
     github_deploy_role_arn
 
-Example format:
+No manually configured `AWS_DEPLOY_ROLE_ARN` GitHub Repository Variable is required.
 
-    arn:aws:iam::<ACCOUNT_ID>:role/cortex-eks-security-lab-deploy-role
+During the `Application Build and Deploy` workflow, GitHub Actions first assumes the Terraform role through OIDC so it can initialize the remote Terraform backend and read the infrastructure outputs.
 
-This role is assumed directly by GitHub Actions using OIDC.
+The workflow then retrieves:
 
-It provides the permissions required for application deployment operations such as:
+    terraform output -raw github_deploy_role_arn
 
-- Amazon ECR
-- Amazon EKS
+and assumes the resulting application deployment role through GitHub OIDC.
+
+This role provides the permissions required for deployment operations such as:
+
+- Amazon ECR image authentication and push operations
+- Amazon EKS authentication
 - Kubernetes deployment operations
+- AWS Load Balancer Controller installation and management
 
 The resulting authentication flow is:
 
-    GitHub OIDC
-       |
-       +--> AWS_TERRAFORM_ROLE_ARN
-       |       |
-       |       +--> Terraform / remote state
-       |
-       +--> AWS_DEPLOY_ROLE_ARN
-               |
-               +--> ECR / EKS deployment
+    GitHub Actions
+        |
+        +--> AWS_TERRAFORM_ROLE_ARN
+        |       |
+        |       +--> Terraform remote state
+        |               |
+        |               +--> github_deploy_role_arn
+        |
+        +--> Application deploy role
+                |
+                +--> ECR
+                |
+                +--> EKS / Kubernetes deployment
+
+This keeps the deployment role account-specific and allows forks of the repository to discover it dynamically after Terraform creates the infrastructure.
 
 ---
 
@@ -798,8 +807,8 @@ Check the AWS VPC quota for the selected region.
 
 Verify:
 
-- `AWS_DEPLOY_ROLE_ARN`
-- EKS access entry
+- Terraform output `github_deploy_role_arn`
+- EKS access entry and access policy association
 - GitHub OIDC trust relationship
 - repository immutable IDs
 
@@ -864,9 +873,13 @@ Finally, remove bootstrap resources only when the main environment no longer dep
     LAB_GITHUB_ORG_ID
     LAB_GITHUB_REPO_ID
 
-### Repository Variable After Infrastructure Deployment
+### Deployment Role Discovery
 
-    AWS_DEPLOY_ROLE_ARN
+The application deployment role is discovered dynamically from Terraform using:
+
+    github_deploy_role_arn
+
+No additional GitHub Repository Variable is required after infrastructure deployment.
 
 ### Optional Cortex Cloud Repository Variable
 
@@ -891,9 +904,9 @@ Finally, remove bootstrap resources only when the main environment no longer dep
     8. Run Terraform Infrastructure with PLAN
     9. Review the Terraform plan
     10. Run Terraform Infrastructure with APPLY
-    11. Retrieve github_deploy_role_arn
-    12. Configure AWS_DEPLOY_ROLE_ARN
-    13. Run Application Build and Deploy
+    11. Run Application Build and Deploy
+
+    12. The workflow retrieves github_deploy_role_arn automatically from Terraform
     14. Integrate the AWS account and EKS environment with Cortex Cloud as required
     15. Validate findings, relationships, and attack paths
     16. Remove the lab when testing is complete
@@ -921,121 +934,4 @@ Do not use real sensitive data.
 Do not expose systems that are not explicitly dedicated to this lab.
 
 ---
-
-## Cortex EKS Security Lab
-
-**Build insecure on purpose. Understand risk in context.**
-
----
-
----
-
-## Fork and Deploy
-
-This repository is designed to be forked and deployed into another AWS account with minimal manual configuration.
-
-### 1. Fork and clone
-
-Fork this repository and clone your fork locally.
-
-Authenticate the GitHub CLI:
-
-    gh auth login
-
-### 2. GitHub repository identity
-
-The AWS OIDC trust uses GitHub immutable repository identity. The repository owner and repository name are discovered directly from the fork:
-
-    export TF_VAR_github_org="$(gh repo view --json owner --jq '.owner.login')"
-    export TF_VAR_github_repo="$(gh repo view --json name --jq '.name')"
-
-The immutable owner and repository IDs are stored as GitHub repository variables:
-
-    gh variable set LAB_GITHUB_ORG_ID --body "$(gh api "users/${TF_VAR_github_org}" --jq '.id')"
-    gh variable set LAB_GITHUB_REPO_ID --body "$(gh repo view --json databaseId --jq '.databaseId')"
-
-This allows forks to use their own immutable GitHub identity instead of values belonging to the original repository.
-
-### 3. AWS bootstrap
-
-The bootstrap creates the AWS resources required by the Terraform pipeline, including remote Terraform state and the GitHub Actions Terraform role.
-
-Repository configuration includes:
-
-- `AWS_REGION`
-- `AWS_TERRAFORM_ROLE_ARN`
-- `TF_STATE_BUCKET`
-- `LAB_GITHUB_ORG_ID`
-- `LAB_GITHUB_REPO_ID`
-
-A human EKS administrator principal is optional:
-
-- `EKS_ADMIN_PRINCIPAL_ARN`
-
-The application deployment role does not need to be manually configured. Terraform creates it and exposes it through the `github_deploy_role_arn` output.
-
-### 4. Cortex configuration
-
-Configure these GitHub secrets:
-
-- `CORTEX_API_KEY`
-- `CORTEX_API_KEY_ID`
-
-Configure the GitHub variable:
-
-- `CORTEX_API_URL`
-
-Example EMEA endpoint:
-
-    https://api-emea-ccr.xdr.eu.paloaltonetworks.com
-
-### 5. Deploy infrastructure
-
-Run the GitHub Actions workflow:
-
-    Terraform Infrastructure
-    action: apply
-
-Terraform creates the VPC, EKS cluster, ECR repository, IAM roles, Pod Identity associations, sensitive-data demo S3 resources, and supporting infrastructure.
-
-### 6. Deploy the application
-
-After the infrastructure workflow completes successfully, run:
-
-    Application Build and Deploy
-
-The application pipeline retrieves directly from Terraform:
-
-- EKS cluster name
-- ECR repository URL
-- sensitive S3 bucket name
-- application deploy role ARN
-
-It then runs the Cortex security scans, builds and pushes the image, installs the AWS Load Balancer Controller, and deploys the Kubernetes workloads and Ingress.
-
-### Deployment flow
-
-    Fork
-      |
-      +-- GitHub immutable identity
-      |
-      +-- AWS Bootstrap
-      |     +-- Terraform state
-      |     +-- Terraform OIDC role
-      |
-      +-- Terraform Infrastructure
-      |     +-- VPC / EKS
-      |     +-- ECR
-      |     +-- Sensitive S3
-      |     +-- Pod Identity
-      |     +-- Application deploy role
-      |
-      +-- Application Build and Deploy
-            +-- Cortex security scans
-            +-- ECR image
-            +-- AWS Load Balancer Controller
-            +-- Kubernetes application
-            +-- Internet-facing ALB
-
-> **Warning:** This is an intentionally vulnerable security lab. Deploy it only in an isolated AWS account/environment dedicated to security testing.
 

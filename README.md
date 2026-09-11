@@ -925,3 +925,117 @@ Do not expose systems that are not explicitly dedicated to this lab.
 ## Cortex EKS Security Lab
 
 **Build insecure on purpose. Understand risk in context.**
+
+---
+
+---
+
+## Fork and Deploy
+
+This repository is designed to be forked and deployed into another AWS account with minimal manual configuration.
+
+### 1. Fork and clone
+
+Fork this repository and clone your fork locally.
+
+Authenticate the GitHub CLI:
+
+    gh auth login
+
+### 2. GitHub repository identity
+
+The AWS OIDC trust uses GitHub immutable repository identity. The repository owner and repository name are discovered directly from the fork:
+
+    export TF_VAR_github_org="$(gh repo view --json owner --jq '.owner.login')"
+    export TF_VAR_github_repo="$(gh repo view --json name --jq '.name')"
+
+The immutable owner and repository IDs are stored as GitHub repository variables:
+
+    gh variable set LAB_GITHUB_ORG_ID --body "$(gh api "users/${TF_VAR_github_org}" --jq '.id')"
+    gh variable set LAB_GITHUB_REPO_ID --body "$(gh repo view --json databaseId --jq '.databaseId')"
+
+This allows forks to use their own immutable GitHub identity instead of values belonging to the original repository.
+
+### 3. AWS bootstrap
+
+The bootstrap creates the AWS resources required by the Terraform pipeline, including remote Terraform state and the GitHub Actions Terraform role.
+
+Repository configuration includes:
+
+- `AWS_REGION`
+- `AWS_TERRAFORM_ROLE_ARN`
+- `TF_STATE_BUCKET`
+- `LAB_GITHUB_ORG_ID`
+- `LAB_GITHUB_REPO_ID`
+
+A human EKS administrator principal is optional:
+
+- `EKS_ADMIN_PRINCIPAL_ARN`
+
+The application deployment role does not need to be manually configured. Terraform creates it and exposes it through the `github_deploy_role_arn` output.
+
+### 4. Cortex configuration
+
+Configure these GitHub secrets:
+
+- `CORTEX_API_KEY`
+- `CORTEX_API_KEY_ID`
+
+Configure the GitHub variable:
+
+- `CORTEX_API_URL`
+
+Example EMEA endpoint:
+
+    https://api-emea-ccr.xdr.eu.paloaltonetworks.com
+
+### 5. Deploy infrastructure
+
+Run the GitHub Actions workflow:
+
+    Terraform Infrastructure
+    action: apply
+
+Terraform creates the VPC, EKS cluster, ECR repository, IAM roles, Pod Identity associations, sensitive-data demo S3 resources, and supporting infrastructure.
+
+### 6. Deploy the application
+
+After the infrastructure workflow completes successfully, run:
+
+    Application Build and Deploy
+
+The application pipeline retrieves directly from Terraform:
+
+- EKS cluster name
+- ECR repository URL
+- sensitive S3 bucket name
+- application deploy role ARN
+
+It then runs the Cortex security scans, builds and pushes the image, installs the AWS Load Balancer Controller, and deploys the Kubernetes workloads and Ingress.
+
+### Deployment flow
+
+    Fork
+      |
+      +-- GitHub immutable identity
+      |
+      +-- AWS Bootstrap
+      |     +-- Terraform state
+      |     +-- Terraform OIDC role
+      |
+      +-- Terraform Infrastructure
+      |     +-- VPC / EKS
+      |     +-- ECR
+      |     +-- Sensitive S3
+      |     +-- Pod Identity
+      |     +-- Application deploy role
+      |
+      +-- Application Build and Deploy
+            +-- Cortex security scans
+            +-- ECR image
+            +-- AWS Load Balancer Controller
+            +-- Kubernetes application
+            +-- Internet-facing ALB
+
+> **Warning:** This is an intentionally vulnerable security lab. Deploy it only in an isolated AWS account/environment dedicated to security testing.
+

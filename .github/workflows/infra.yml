@@ -62,6 +62,8 @@ jobs:
         continue-on-error: true
         working-directory: ${{ github.workspace }}
         run: |
+          set -euo pipefail
+
           if [ -z "${CORTEX_API_URL}" ] || \
              [ -z "${CORTEX_API_KEY}" ] || \
              [ -z "${CORTEX_API_KEY_ID}" ]; then
@@ -69,17 +71,37 @@ jobs:
             exit 1
           fi
 
-          crtx_resp=$(curl -sS \
-            "${CORTEX_API_URL}/public_api/v1/unified-cli/releases/download-link?os=linux&architecture=amd64" \
+          BASE="${CORTEX_API_URL%/}"
+          URL="${BASE}/public_api/v1/unified-cli/releases/download-link?os=linux&architecture=amd64"
+
+          echo "Requesting Cortex CLI download link from: ${BASE}"
+
+          http_code=$(curl -sS \
+            -o /tmp/cortex-cli-response.json \
+            -w "%{http_code}" \
+            "${URL}" \
             -H "x-xdr-auth-id: ${CORTEX_API_KEY_ID}" \
             -H "Authorization: ${CORTEX_API_KEY}")
 
-          crtx_url=$(echo "${crtx_resp}" | jq -r '.signed_url')
+          echo "Cortex API HTTP status: ${http_code}"
 
-          test -n "${crtx_url}"
-          test "${crtx_url}" != "null"
+          if [ "${http_code}" -lt 200 ] || [ "${http_code}" -ge 300 ]; then
+            echo "Cortex API request failed."
+            jq -c 'del(.api_key, .key, .token, .authorization)' \
+              /tmp/cortex-cli-response.json 2>/dev/null || \
+              cat /tmp/cortex-cli-response.json
+            exit 1
+          fi
 
-          curl -sSLo cortexcli "${crtx_url}"
+          crtx_url=$(jq -r '.signed_url // empty' /tmp/cortex-cli-response.json)
+
+          if [ -z "${crtx_url}" ]; then
+            echo "Cortex API response did not contain signed_url."
+            jq -c '.' /tmp/cortex-cli-response.json
+            exit 1
+          fi
+
+          curl -fsSL -o cortexcli "${crtx_url}"
           chmod +x cortexcli
           ./cortexcli --version
 
